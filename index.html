@@ -11,7 +11,7 @@
   .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);margin-bottom:14px}
   .panel h2{margin:0;padding:12px 16px;border-bottom:1px solid var(--line);font-size:18px}
   .panel .content{padding:16px}
-  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .toolbar{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
   input{padding:10px;border:1px solid var(--line);border-radius:10px}
   button{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:#111827;color:#fff;cursor:pointer;font-weight:600}
   .muted{color:var(--muted);font-size:12px}
@@ -29,15 +29,93 @@
   .badge{position:absolute;top:8px;right:8px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;padding:2px 8px;border-radius:999px;font-size:11px}
   .label{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.94);padding:4px 6px;font-size:11px}
   pre{white-space:pre-wrap;font-size:14px;line-height:1.65;margin:0}
+
+  .btns{display:flex;gap:10px;align-items:center}
+  .btns button{flex:1 1 0}
+  @media (max-width: 560px){
+    .toolbar{grid-template-columns:1fr}
+    .btns{justify-content:space-between}
+    .btns button{flex:1 1 0}
+  }
+
+
+  
+
+
+  
+
+
+  /* 手機：四張牌同屏顯示（縮小尺寸） */
+  @media (max-width: 560px){
+    .slots{
+      display:flex !important;
+      flex-wrap:nowrap !important;
+      overflow-x:auto;
+      gap:8px;
+      padding:8px;
+      -webkit-overflow-scrolling:touch;
+      scroll-snap-type:x mandatory;
+      justify-content:center;
+    }
+    .slot,.picked{
+      flex:0 0 auto;
+      width:22vw;                 /* 四張剛好佔滿手機寬度 */
+      aspect-ratio:120 / 190;
+      height:auto;
+      scroll-snap-align:start;
+    }
+    .slots::-webkit-scrollbar{height:6px}
+    .slots::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:999px}
+    .slots::-webkit-scrollbar-track{background:transparent}
+    #btnLocal{
+      display:block;
+      margin:14px auto 0;
+      padding:10px 28px;
+      width:min(320px, 80%);
+      text-align:center;
+    }
+  }
+
+
+  /* 手機極致緊湊：四張牌更小，避免卡到 */
+  @media (max-width: 560px){
+    .panel .content{padding:12px}
+    .slots{
+      display:flex !important;
+      flex-wrap:nowrap !important;
+      overflow-x:hidden !important; /* 不顯示水平捲動 */
+      gap:6px;
+      padding:6px 6px 10px;
+      justify-content:space-between;
+    }
+    .slot,.picked{
+      flex:0 0 auto;
+      width:20.5vw;              /* 再縮小，四張 + 間距 = 容器寬度內 */
+      aspect-ratio:120 / 190;
+      height:auto;
+      font-size:clamp(12px, 3.6vw, 15px);
+      border-width:2px;
+    }
+    #btnLocal{
+      display:block;
+      margin:12px auto 0;
+      padding:10px 28px;
+      width:min(320px, 78%);
+      text-align:center;
+    }
+  }
+
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="panel"><h2>操作</h2><div class="content">
     <div class="toolbar">
-      <input id="q" placeholder="輸入問題（例：我今天運勢如何？）" style="flex:1;min-width:220px">
-      <button id="shuffle">重新洗牌</button>
-      <button id="clear">清空選牌</button>
+      <input id="q" placeholder="輸入問題（例：我今天運勢如何？）" style="min-width:220px;width:100%">
+      <div class="btns">
+        <button id="shuffle">重新洗牌</button>
+        <button id="clear">清空選牌</button>
+      </div>
     </div>
     <div class="muted" style="margin-top:6px">兩列卡背自動交疊填滿整行。點卡背依序放入 4 個位置（第 4 張為建議）。</div>
   </div></div>
