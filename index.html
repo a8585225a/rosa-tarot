@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rosa 抽牌｜雙模式（含本地牌義）</title>
+<style>
+  :root{--bg:#fbfbfc;--fg:#111827;--muted:#6b7280;--line:#e5e7eb;--card:#fff}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,system-ui,'Noto Sans TC',Segoe UI,Roboto,Helvetica,Arial}
+  .wrap{max-width:1280px;margin:0 auto;padding:16px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);margin-bottom:14px}
+  .panel h2{margin:0;padding:12px 16px;border-bottom:1px solid var(--line);font-size:18px}
+  .panel .content{padding:16px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input{padding:10px;border:1px solid var(--line);border-radius:10px}
+  button{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:#111827;color:#fff;cursor:pointer;font-weight:600}
+  .muted{color:var(--muted);font-size:12px}
+  .deck{display:flex;flex-direction:column;gap:28px}
+  .deck-row{position:relative;width:100%;height:140px}
+  .cardback{position:absolute;top:0;width:74px;height:120px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#0b4aa0;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease}
+  .cardback img{width:100%;height:100%;object-fit:cover;pointer-events:none}
+  .cardback:hover{transform:translateY(-4px);box-shadow:0 6px 12px rgba(0,0,0,.18)}
+  .cardback.is-picked{opacity:.3;pointer-events:none;filter:saturate(.2)}
+  .slots{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+  .slot,.picked{width:120px;height:190px;border-radius:14px;position:relative;flex:0 0 auto}
+  .slot{border:2px dashed #ef4444;color:#ef4444;display:flex;align-items:center;justify-content:center;background:#fff}
+  .picked{border:1px solid var(--line);background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow:hidden;cursor:pointer}
+  .picked img{width:100%;height:100%;object-fit:contain;background:#fff}
+  .badge{position:absolute;top:8px;right:8px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;padding:2px 8px;border-radius:999px;font-size:11px}
+  .label{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.94);padding:4px 6px;font-size:11px}
+  pre{white-space:pre-wrap;font-size:14px;line-height:1.65;margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel"><h2>操作</h2><div class="content">
+    <div class="toolbar">
+      <input id="q" placeholder="輸入問題（例：我今天運勢如何？）" style="flex:1;min-width:220px">
+      <input id="key" type="password" placeholder="OpenAI API Key（選填，用 GPT 解讀）" style="flex:1;min-width:220px">
+      <button id="shuffle">重新洗牌</button>
+      <button id="btnLocal">本地解牌</button>
+      <button id="btnGPT">ChatGPT 解牌</button>
+      <button id="clear">清空選牌</button>
+    </div>
+    <div class="muted" style="margin-top:6px">兩列卡背自動交疊填滿整行。點卡背依序放入 4 個位置（第 4 張為建議）。</div>
+  </div></div>
+
+  <div class="panel"><h2>牌組</h2><div class="content">
+    <div id="deck" class="deck">
+      <div class="deck-row" id="row1"></div>
+      <div class="deck-row" id="row2"></div>
+    </div>
+  </div></div>
+
+  <div class="panel"><h2>你的選牌</h2><div class="content">
+    <div class="slots" id="slots">
+      <div class="slot" data-idx="0">牌 1</div>
+      <div class="slot" data-idx="1">牌 2</div>
+      <div class="slot" data-idx="2">牌 3</div>
+      <div class="slot" data-idx="3">建議</div>
+    </div>
+  </div></div>
+
+  <div class="panel"><h2>解讀</h2><div class="content">
+    <pre id="out" class="muted">（尚未解讀）</pre>
+  </div></div>
+</div>
+
+<script>
+const IMG_DIR="./"; const BACK_FILE="CardBacks.jpg";
+
+const MAJORS=[["00-TheFool.jpg","愚者","The Fool"],["01-TheMagician.jpg","魔術師","The Magician"],["02-TheHighPriestess.jpg","女祭司","The High Priestess"],["03-TheEmpress.jpg","皇后","The Empress"],["04-TheEmperor.jpg","皇帝","The Emperor"],["05-TheHierophant.jpg","教皇","The Hierophant"],["06-TheLovers.jpg","戀人","The Lovers"],["07-TheChariot.jpg","戰車","The Chariot"],["08-Strength.jpg","力量","Strength"],["09-TheHermit.jpg","隱者","The Hermit"],["10-WheelOfFortune.jpg","命運之輪","Wheel of Fortune"],["11-Justice.jpg","正義","Justice"],["12-TheHangedMan.jpg","吊人","The Hanged Man"],["13-Death.jpg","死神","Death"],["14-Temperance.jpg","節制","Temperance"],["15-TheDevil.jpg","惡魔","The Devil"],["16-TheTower.jpg","高塔","The Tower"],["17-TheStar.jpg","星星","The Star"],["18-TheMoon.jpg","月亮","The Moon"],["19-TheSun.jpg","太陽","The Sun"],["20-Judgement.jpg","審判","Judgement"],["21-TheWorld.jpg","世界","The World"]];
+const NUM2ZH={1:"一",2:"二",3:"三",4:"四",5:"五",6:"六",7:"七",8:"八",9:"九",10:"十"};
+const SUITS=[{prefix:"Wands",zhSuit:"權杖"},{prefix:"Cups",zhSuit:"聖杯"},{prefix:"Swords",zhSuit:"寶劍"},{prefix:"Pentacles",zhSuit:"錢幣"}];
+function mkMinor(prefix,zhSuit){const out=[];for(let i=1;i<=14;i++){const nn=String(i).padStart(2,"0");let zhNum;i<=10?zhNum=NUM2ZH[i]:zhNum=i===11?"侍從":i===12?"騎士":i===13?"皇后":"國王";out.push([`${prefix}${nn}.jpg`,`${zhSuit}之${zhNum}`,`${prefix} ${nn}`]);}return out;}
+const MINORS=SUITS.flatMap(s=>mkMinor(s.prefix,s.zhSuit));
+const FULL_DECK=[...MAJORS,...MINORS].map(([file,zh,en])=>({file,zh,en,path:IMG_DIR+file}));
+
+// ===== 牌義字典（正/逆位） =====
+const MEANINGS={
+  "The Fool":{up:"新開始，自發勇氣",rev:"猶豫不前，魯莽"},
+  "The Magician":{up:"實現意圖，資源整合",rev:"操控、計劃不周"},
+  "The High Priestess":{up:"直覺、神秘",rev:"迷惑、隱瞞"},
+  "The Empress":{up:"豐盛、孕育",rev:"創意阻礙，忽視自我"},
+  "The Emperor":{up:"權威、秩序",rev:"專制、僵化"},
+  "The Hierophant":{up:"傳統、指導",rev:"叛逆、自說自話"},
+  "The Lovers":{up:"愛情、抉擇和諧",rev:"衝突、不決"},
+  "The Chariot":{up:"意志力、勝利前進",rev:"失控、停滯"},
+  "Strength":{up:"內在勇氣、韌性",rev:"自信缺失、無法設限"},
+  "The Hermit":{up:"內省、引導",rev:"孤立、逃避"},
+  "Wheel of Fortune":{up:"轉機、周期",rev:"抗拒改變、停滯"},
+  "Justice":{up:"公平、責任",rev:"不公、推託"},
+  "The Hanged Man":{up:"放下、換視角",rev:"固執、停滯"},
+  "Death":{up:"轉變、重生",rev:"抗拒改變、保守"},
+  "Temperance":{up:"和諧、中庸",rev:"失衡、過度"},
+  "The Devil":{up:"慾望、束縛",rev:"解脫、戒除"},
+  "The Tower":{up:"崩潰、喚醒",rev:"抗拒危機、自保"},
+  "The Star":{up:"希望、療癒",rev:"失望、迷惘"},
+  "The Moon":{up:"直覺、潛意識",rev:"混亂、不明"},
+  "The Sun":{up:"喜悅、成功",rev:"疲憊、阻礙"},
+  "Judgement":{up:"覺醒、寬恕",rev:"逃避責任、自責"},
+  "The World":{up:"完成、圓滿",rev:"遲滯、不完整"},
+  "Cups 01":{up:"新情感萌芽",rev:"情感封閉"},
+  "Cups 02":{up:"情感連結",rev:"關係失衡"},
+  "Cups 03":{up:"歡聚慶祝",rev:"過度放縱"},
+  "Cups 04":{up:"冷漠反思",rev:"重新開放"},
+  "Cups 05":{up:"失落悲傷",rev:"療傷釋懷"},
+  "Cups 06":{up:"懷舊童真",rev:"沉迷過去"},
+  "Cups 07":{up:"多選幻想",rev:"幻想破滅"},
+  "Cups 08":{up:"離開成長",rev:"逃避停滯"},
+  "Cups 09":{up:"心願成真",rev:"過度自滿"},
+  "Cups 10":{up:"家庭圓滿",rev:"表面幸福"},
+  "Cups 11":{up:"創意好消息",rev:"情緒波動"},
+  "Cups 12":{up:"浪漫追求",rev:"虛浮不實"},
+  "Cups 13":{up:"情感敏銳",rev:"情緒失控"},
+  "Cups 14":{up:"情緒穩定",rev:"冷漠壓抑"},
+  "Pentacles 01":{up:"新財機會",rev:"浪費失去"},
+  "Pentacles 02":{up:"平衡多工",rev:"失衡負荷"},
+  "Pentacles 03":{up:"合作技藝",rev:"不合作草率"},
+  "Pentacles 04":{up:"控制安全",rev:"守財惶恐"},
+  "Pentacles 05":{up:"困窘缺乏",rev:"恢復支援"},
+  "Pentacles 06":{up:"施與受平衡",rev:"嫉妒不平"},
+  "Pentacles 07":{up:"投資等待",rev:"急躁缺耐"},
+  "Pentacles 08":{up:"專研勤奮",rev:"缺乏熱情"},
+  "Pentacles 09":{up:"獨立富足",rev:"炫耀孤獨"},
+  "Pentacles 10":{up:"家族穩定",rev:"家族壓力"},
+  "Pentacles 11":{up:"新計畫好學",rev:"分心不成熟"},
+  "Pentacles 12":{up:"踏實可靠",rev:"死板無趣"},
+  "Pentacles 13":{up:"實用關懷",rev:"物質化犧牲"},
+  "Pentacles 14":{up:"成功領導",rev:"貪婪保守"},
+  "Swords 01":{up:"真理洞察",rev:"混亂誤導"},
+  "Swords 02":{up:"猶豫平衡",rev:"封閉逼選"},
+  "Swords 03":{up:"心痛分離",rev:"療癒釋放"},
+  "Swords 04":{up:"休息療傷",rev:"過度靜止"},
+  "Swords 05":{up:"衝突代價",rev:"妥協後悔"},
+  "Swords 06":{up:"走出困境",rev:"逃避不前"},
+  "Swords 07":{up:"狡猾偷竊",rev:"被揭誠實"},
+  "Swords 08":{up:"束縛無力",rev:"自我突破"},
+  "Swords 09":{up:"焦慮夜思",rev:"釋放壓力"},
+  "Swords 10":{up:"痛苦終結",rev:"拒絕走出"},
+  "Swords 11":{up:"偵察好奇",rev:"謠言衝動"},
+  "Swords 12":{up:"果斷直率",rev:"衝動侵略"},
+  "Swords 13":{up:"清晰智慧",rev:"冷酷尖刻"},
+  "Swords 14":{up:"理性公正",rev:"冷血專斷"},
+  "Wands 01":{up:"新憧憬創意",rev:"延遲無力"},
+  "Wands 02":{up:"規劃開眼界",rev:"猶豫閉塞"},
+  "Wands 03":{up:"展望拓展",rev:"期待落空"},
+  "Wands 04":{up:"慶祝安心",rev:"不穩中斷"},
+  "Wands 05":{up:"競爭衝突",rev:"避免衝突"},
+  "Wands 06":{up:"公開成功",rev:"名聲問題"},
+  "Wands 07":{up:"守護抗爭",rev:"缺乏信心"},
+  "Wands 08":{up:"迅速進展",rev:"延誤延遲"},
+  "Wands 09":{up:"疲憊不屈",rev:"精疲力竭"},
+  "Wands 10":{up:"負擔沉重",rev:"必須卸下"},
+  "Wands 11":{up:"冒險探索",rev:"莽撞未熟"},
+  "Wands 12":{up:"衝動熱情",rev:"自我破壞"},
+  "Wands 13":{up:"自信魅力",rev:"自我中心"},
+  "Wands 14":{up:"領導願景",rev:"專制空談"}
+};
+const SUIT_HINT={"Wands":"行動/意志/創造","Cups":"情緒/關係/感受","Swords":"思考/決策/溝通","Pentacles":"資源/金錢/身體/落地"};
+const NUM_HINT={"01":"開始/機會","02":"選擇/對立","03":"擴張/合作","04":"穩定/限制","05":"挑戰/變動","06":"協調/交流","07":"評估/耐心","08":"力量/進展","09":"成果接近","10":"完成/循環"};
+
+function meaningFor(card){
+  const en = card.en.replace('.jpg','');
+  if(MEANINGS[en]) return MEANINGS[en];
+  const m = en.match(/(Wands|Cups|Swords|Pentacles)\s+(\d{2})/);
+  if(m){
+    const suit=m[1],num=m[2];
+    const baseUp = `${SUIT_HINT[suit]}・${NUM_HINT[num]||''}`.replace(/・$/,'');
+    return {up: baseUp||"一般含義", rev:"阻滯/失衡/過度，留意該面向的反面訊號"};
+  }
+  return {up:"一般含義", rev:"反面/失衡/延宕"};
+}
+
+const picked=[]; let deckOrder=shuffle(FULL_DECK.slice());
+const row1=document.getElementById('row1'), row2=document.getElementById('row2'), slots=document.getElementById('slots'), outEl=document.getElementById('out');
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function layoutRow(rowEl,cards){const w=rowEl.clientWidth,cw=74,step=(w-cw)/(cards.length-1);rowEl.innerHTML='';
+  cards.forEach((card,i)=>{const x=Math.max(0,Math.min(w-cw,step*i));const back=document.createElement('div');back.className='cardback';back.style.left=x+'px';back.title=card.en;back.innerHTML=`<img src="${IMG_DIR+BACK_FILE}" alt="back">`;back.onclick=()=>pickCard(card,back);rowEl.appendChild(back);});
+}
+function renderDeck(){const half=Math.ceil(deckOrder.length/2);layoutRow(row1,deckOrder.slice(0,half));layoutRow(row2,deckOrder.slice(half));}
+function renderSlots(){slots.innerHTML='';for(let i=0;i<4;i++){const e=document.createElement('div');e.className='slot';e.dataset.idx=i;e.textContent=i===3?'建議':`牌 ${i+1}`;slots.appendChild(e);}picked.forEach((c,i)=>{const el=document.createElement('div');el.className='picked';el.innerHTML=`<img src="${c.path}"><div class="label">${c.reversed?'逆位':'正位'}｜${c.zh} <span class="muted" style="font-size:11px">(${c.en.replace('.jpg','')})</span></div>${i===3?'<div class="badge">建議</div>':''}`;el.onclick=()=>removePicked(c.file);slots.children[i].replaceWith(el);});}
+function pickCard(card, backNode){if(picked.length>=4){alert("已選 4 張；請先清空或替換。");return;}if(picked.find(c=>c.file===card.file))return;picked.push({...card,reversed:Math.random()<0.48});backNode.classList.add('is-picked');backNode.style.pointerEvents='none';renderSlots();}
+function removePicked(file){const idx=picked.findIndex(x=>x.file===file);if(idx>=0)picked.splice(idx,1);renderDeck();renderSlots();}
+
+document.getElementById('shuffle').onclick=()=>{picked.splice(0,picked.length);deckOrder=shuffle(FULL_DECK.slice());renderDeck();renderSlots();outEl.textContent='（已洗牌，請重新選擇）';outEl.classList.add('muted');};
+document.getElementById('clear').onclick=()=>{picked.splice(0,picked.length);renderDeck();renderSlots();outEl.textContent='（已清空選牌）';outEl.classList.add('muted');};
+
+document.getElementById('btnLocal').onclick=()=>{
+  const q=document.getElementById('q').value.trim();
+  if(picked.length===0){alert('請先選牌');return;}
+  const lines=picked.map((c,i)=>{const m=meaningFor(c);const pos=c.reversed?'逆位':'正位';const gist=c.reversed?m.rev:m.up;return `第${i+1}張${i===3?'（建議）':''}｜${c.zh}（${pos}）：${gist}`;}).join('\n');
+  const tail=picked.length===4?'把第4張作為收尾行動口訣，今天先做一個最小步驟，觀察回饋再調整。':'先做一個最小步驟，觀察回饋再調整。';
+  outEl.textContent=`你的問題：${q||'（未填）'}\n\n${lines}\n\n整體指引：${tail}`; outEl.classList.remove('muted');
+};
+
+document.getElementById('btnGPT').onclick=async()=>{
+  const q=document.getElementById('q').value.trim(); if(picked.length===0){alert('請先選牌');return;}
+  const key=(document.getElementById('key').value||'').trim(); if(!key){alert('請先輸入 OpenAI API Key');return;}
+  const list=picked.map((c,i)=>`第${i+1}張${i===3?'（建議）':''}：${c.zh}${c.reversed?'（逆位）':'（正位）'}｜${c.en.replace('.jpg','')}`).join('\\n');
+  const prompt=`問題：${q||'（未輸入）'}\\n${list}\\n\\n請以繁中回覆：一句話總結、3 點洞見、2 個行動、1 條避險，若有第 4 張融合為收尾口訣。`;
+  try{const txt=await askOpenAI(key,prompt); outEl.textContent=txt; outEl.classList.remove('muted');}
+  catch(e){outEl.textContent='解讀失敗：'+(e?.message||e); outEl.classList.remove('muted');}
+};
+
+async function askOpenAI(apiKey,prompt){
+  const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+    body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:'你是一位理性、務實且具前瞻視角的塔羅解牌師。請以台灣正體中文回覆，精煉、結構化、可執行。'},{role:'user',content:prompt}],temperature:0.5})});
+  const data=await r.json(); const text=data?.choices?.[0]?.message?.content?.trim(); if(!text) throw new Error('OpenAI 回應為空或金鑰無效'); return text;
+}
+
+renderDeck(); renderSlots(); window.addEventListener('resize',()=>renderDeck());
+</script>
+</body>
+</html>
